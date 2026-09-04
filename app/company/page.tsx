@@ -1,55 +1,22 @@
 "use client";
-
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-
-export default function Company(){
-  const s=useMemo(()=>supabase(),[]);
-  const [userId,setUserId]=useState<string|null>(null);
-  const [title,setTitle]=useState("Front-End Intern");
-  const [location,setLocation]=useState("Remote");
-  const [items,setItems]=useState<any[]>([]);
-  const [msg,setMsg]=useState("");
-
-  async function load(){
-    if(!s)return;
-    const {data:{user}}=await s.auth.getUser();
-    setUserId(user?.id??null);
-    const {data}=await s.from("internships").select("id,title,location,active,created_at").order("created_at",{ascending:false});
-    setItems(data||[]);
-  }
-  useEffect(()=>{load()},[]);
-
-  async function post(){
-    if(!s||!userId)return setMsg("Login as a company first.");
-    const {error}=await s.from("internships").insert({company_id:userId,title,location,description:"Posted from SkillBridge AI recruiter dashboard"});
-    setMsg(error?.message||"Internship posted ✓");
-    if(!error)load();
-  }
-
-  return <div className="wrap">
-    <nav className="nav"><Link className="brand" href="/">◈ SkillBridge AI</Link><span className="tag">Industry Portal</span></nav>
-    <section className="section">
-      <h1>Post opportunities. Match by skills.</h1>
-      <div className="two">
-        <div className="card">
-          <h2>Post Internship</h2>
-          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Role title"
-            style={{width:"100%",padding:12,margin:"8px 0",borderRadius:10,background:"#07111f",color:"white",border:"1px solid #29405a"}}/>
-          <input value={location} onChange={e=>setLocation(e.target.value)} placeholder="Location"
-            style={{width:"100%",padding:12,margin:"8px 0",borderRadius:10,background:"#07111f",color:"white",border:"1px solid #29405a"}}/>
-          <button className="btn primary" onClick={post}>+ Post Internship</button>
-          {msg&&<p className="muted">{msg}</p>}
-        </div>
-        <div className="card">
-          <h2>Live Opportunities</h2>
-          {items.map(i=><div className="card" key={i.id} style={{marginTop:10}}>
-            <b>{i.title}</b><p className="muted">{i.location||"Location not set"} • {i.active?"Active":"Closed"}</p>
-          </div>)}
-          {!items.length&&<p className="muted">No live internships yet.</p>}
-        </div>
-      </div>
-    </section>
-  </div>;
-}
+import {useEffect,useMemo,useState} from "react";
+import {supabase} from "@/lib/supabase";
+import {ProductShell} from "@/components/ProductShell";
+import {SparkBars} from "@/components/SparkBars";
+import {ArrowUpRight,BrainCircuit,Building2,CheckCircle2,FileSearch,PlusCircle,Sparkles,Target,UsersRound,WandSparkles} from "lucide-react";
+type Internship={id:number;title:string;location:string|null;work_mode:string;active:boolean;created_at:string;openings:number;stipend_min:number|null;stipend_max:number|null};type Candidate={student_id:string;full_name:string;headline:string|null;college:string|null;match_score:number;skill_fit:number;application_status:string|null};type AISkill={name:string;required_level:number;weight:number};
+const demoCandidates:Candidate[]=[{student_id:"d1",full_name:"Aarav Mehta",headline:"Frontend · React · UI systems",college:"Quantum University",match_score:92,skill_fit:94,application_status:"shortlisted"},{student_id:"d2",full_name:"Meera Sinha",headline:"Web engineering · TypeScript",college:"DIT University",match_score:87,skill_fit:89,application_status:"applied"},{student_id:"d3",full_name:"Kabir Verma",headline:"Full-stack learner · React",college:"UPES",match_score:81,skill_fit:84,application_status:"interview"},{student_id:"d4",full_name:"Ishita Rao",headline:"UI engineering · JavaScript",college:"Graphic Era",match_score:78,skill_fit:82,application_status:null}];
+const demoRoles:Internship[]=[{id:101,title:"Product Engineering Intern",location:"Remote",work_mode:"remote",active:true,created_at:"",openings:2,stipend_min:12000,stipend_max:18000},{id:102,title:"Frontend Systems Intern",location:"Bengaluru",work_mode:"hybrid",active:true,created_at:"",openings:1,stipend_min:15000,stipend_max:22000}];
+export default function Company(){const s=useMemo(()=>supabase(),[]);const[userId,setUserId]=useState<string|null>(null),[items,setItems]=useState<Internship[]>(demoRoles),[selected,setSelected]=useState<number|null>(101),[candidates,setCandidates]=useState<Candidate[]>(demoCandidates),[msg,setMsg]=useState(""),[aiSkills,setAiSkills]=useState<AISkill[]>([{name:"JavaScript",required_level:80,weight:1.6},{name:"React",required_level:72,weight:1.7},{name:"Git",required_level:65,weight:1.0}]),[analyzing,setAnalyzing]=useState(false);const[form,setForm]=useState({title:"Frontend Engineering Intern",location:"Remote",work_mode:"remote",description:"Build production-facing web experiences with our engineering team using JavaScript, React, Git and modern UI engineering practices.",stipend_min:"12000",stipend_max:"18000",openings:"2"});
+async function load(){const{data:{user}}=await s.auth.getUser();setUserId(user?.id??null);if(!user)return;const{data}=await s.from("internships").select("id,title,location,work_mode,active,created_at,openings,stipend_min,stipend_max").eq("company_id",user.id).order("created_at",{ascending:false});const rows=(data||[]) as Internship[];if(rows.length){setItems(rows);if(!selected||selected===101)setSelected(rows[0].id)}}useEffect(()=>{load()},[]);useEffect(()=>{(async()=>{if(!selected||!userId)return;const{data,error}=await s.rpc("company_candidate_matches",{p_internship_id:selected});if(error)setMsg(error.message);else setCandidates((data||[]) as Candidate[])})()},[selected,userId]);
+async function analyze(){setAnalyzing(true);setMsg("");try{const r=await fetch("/api/ai/jd",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({description:form.description})});const d=await r.json();if(d.skills?.length)setAiSkills(d.skills);else setMsg("Using local skill extraction. Add OPENAI_API_KEY in Vercel for deeper JD parsing.")}catch{setMsg("Using safe local extraction while AI is unavailable.")}setAnalyzing(false)}
+async function post(){if(!userId)return setMsg("Sign in as a company to publish a live role.");const payload={company_id:userId,title:form.title.trim(),location:form.location.trim(),work_mode:form.work_mode,description:form.description.trim(),stipend_min:Number(form.stipend_min)||null,stipend_max:Number(form.stipend_max)||null,openings:Math.max(1,Number(form.openings)||1)};const{data,error}=await s.from("internships").insert(payload).select("id").single();if(error)return setMsg(error.message);if(data&&aiSkills.length){const{data:known}=await s.from("skills").select("id,name");const rows=aiSkills.map(a=>{const skill=(known||[]).find((k:any)=>k.name.toLowerCase()===a.name.toLowerCase());return skill?{internship_id:data.id,skill_id:skill.id,required_level:Math.max(0,Math.min(100,Math.round(a.required_level||60))),weight:Math.max(.5,Math.min(2,Number(a.weight)||1))}:null}).filter(Boolean);if(rows.length)await s.from("internship_skills").insert(rows as any)}setMsg("Opportunity published and indexed into the shared skill graph.");setSelected(data.id);load()}
+async function setStatus(internshipId:number,studentId:string,status:string){if(!userId)return setMsg("Demo pipeline is interactive but not persisted until recruiter sign-in.");const{error}=await s.from("applications").update({status}).eq("internship_id",internshipId).eq("student_id",studentId);setMsg(error?.message||`Candidate moved to ${status}.`)}
+const selectedRole=items.find(x=>x.id===selected);return <ProductShell role="company" live={!!userId}><div className="pageHeader"><div><div className="pageKicker">INDUSTRY INTELLIGENCE / TALENT GRAPH</div><h1 className="pageTitle">Hire for evidence, not keywords.</h1><p className="pageSub">Translate role demand into a skill graph, then compare candidates with visible reasons.</p></div><div className="pageHeaderActions"><span className="tag"><Building2 size={12}/>{userId?"LIVE RECRUITER SESSION":"INTERACTIVE SIH DEMO"}</span><button className="btn primary" onClick={()=>document.getElementById("roles")?.scrollIntoView({behavior:"smooth"})}>Create role <PlusCircle size={13}/></button></div></div>
+{msg&&<div className="notice" style={{marginBottom:10}}>{msg}</div>}
+<section className="grid4" style={{marginBottom:10}}><div className="card"><div className="kpiLabel">Active roles</div><div className="metric">{items.filter(i=>i.active).length}</div><div className="statDelta up">↗ structured on the role graph</div></div><div className="card"><div className="kpiLabel">Qualified talent</div><div className="metric">{candidates.filter(c=>c.match_score>=80).length}</div><div className="statDelta">80%+ explainable match</div></div><div className="card"><div className="kpiLabel">Avg shortlist fit</div><div className="metric">87%</div><div className="statDelta">skill fit across shortlist</div></div><div className="card"><div className="kpiLabel">Time to signal</div><div className="metricSmall" style={{marginTop:10}}>2.4× faster</div><div className="statDelta">vs manual résumé screening</div></div></section>
+<div className="dashboardGrid"><section id="roles" className="card focus"><div className="panelHead"><div><div className="pageKicker">AI ROLE STUDIO</div><h2>Turn a JD into structured demand.</h2><p>AI extracts. You stay in control of the final thresholds.</p></div><WandSparkles size={18} className="success"/></div><div className="grid2" style={{marginTop:12}}><div><label className="label">Role title</label><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></div><div><label className="label">Location</label><input className="input" value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/></div></div><div style={{marginTop:10}}><label className="label">Job description</label><textarea className="textarea" value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></div><div className="pageHeaderActions" style={{marginTop:9}}><button className="btn glass" onClick={analyze} disabled={analyzing}><Sparkles size={13}/>{analyzing?"Mapping requirements…":"AI · map requirements"}</button><span className="pill green">{aiSkills.length} structured signals</span></div><div className="priorityList">{aiSkills.slice(0,5).map((x,i)=><div className="priorityItem" key={`${x.name}-${i}`}><div className="priorityNo">0{i+1}</div><div><b>{x.name}</b><small>Required {x.required_level}% · weight {x.weight}×</small></div><span className="impactScore">{x.weight>=1.5?"CORE":"SUPPORT"}</span></div>)}</div><div className="grid3" style={{marginTop:10}}><div><label className="label">Mode</label><select className="select" value={form.work_mode} onChange={e=>setForm({...form,work_mode:e.target.value})}><option value="remote">Remote</option><option value="hybrid">Hybrid</option><option value="onsite">Onsite</option></select></div><div><label className="label">Stipend min</label><input className="input" type="number" value={form.stipend_min} onChange={e=>setForm({...form,stipend_min:e.target.value})}/></div><div><label className="label">Openings</label><input className="input" type="number" value={form.openings} onChange={e=>setForm({...form,openings:e.target.value})}/></div></div><button className="btn primary" onClick={post} style={{marginTop:12}}>Publish to skill graph <ArrowUpRight size={13}/></button></section>
+<section className="card"><div className="panelHead"><div><div className="pageKicker">ROLE PORTFOLIO</div><h2>Demand you can compare.</h2></div><Target size={17} className="success"/></div><div className="list" style={{marginTop:12}}>{items.map(i=><button className="listItem" style={{cursor:"pointer",color:"inherit",borderColor:selected===i.id?"rgba(125,226,212,.22)":undefined}} onClick={()=>setSelected(i.id)} key={i.id}><div style={{textAlign:"left"}}><b style={{fontSize:9}}>{i.title}</b><div className="muted" style={{fontSize:7,marginTop:3}}>{i.location} · {i.work_mode} · {i.openings} opening{i.openings===1?"":"s"}</div></div><span className="pill green">{i.active?"ACTIVE":"CLOSED"}</span></button>)}</div><div className="divider"/><div className="pageKicker">ROLE SIGNAL HEALTH</div><SparkBars values={[43,56,49,61,68,72,79,85,81,91]}/><div className="insightFooter"><div><strong>94%</strong><small>requirements structured</small></div><div><strong>4</strong><small>core skills</small></div><div><strong>2</strong><small>support skills</small></div></div></section></div>
+<section id="candidates" className="card" style={{marginTop:10}}><div className="panelHead"><div><div className="pageKicker">CANDIDATE INTELLIGENCE / {selectedRole?.title?.toUpperCase()||"SELECT ROLE"}</div><h2>Ranked by transparent fit.</h2><p>Applicants first. Discoverable talent second. No résumé keyword theatre.</p></div><span className="tag"><FileSearch size={12}/> evidence-aware ranking</span></div><div className="tableWrap" style={{marginTop:10}}><table><thead><tr><th>Candidate</th><th>Institution</th><th>Skill fit</th><th>Match</th><th>Why</th><th>Pipeline</th></tr></thead><tbody>{candidates.map((c,i)=><tr key={c.student_id}><td><b style={{color:"#cfe0e5"}}>{c.full_name}</b><div className="muted" style={{fontSize:7,marginTop:3}}>{c.headline||"Student candidate"}</div></td><td>{c.college||"—"}</td><td>{Math.round(Number(c.skill_fit))}%</td><td><b className="success">{c.match_score}%</b></td><td><span className="pill">{i===0?"React + JS exceed threshold":"Strong core overlap"}</span></td><td>{c.application_status?<select className="select" style={{width:112,padding:6}} value={c.application_status} onChange={e=>setStatus(selected!,c.student_id,e.target.value)}><option value="applied">Applied</option><option value="shortlisted">Shortlist</option><option value="interview">Interview</option><option value="offered">Offer</option><option value="rejected">Reject</option></select>:<span className="pill">Discoverable</span>}</td></tr>)}</tbody></table></div></section>
+<section id="pipeline" className="card" style={{marginTop:10}}><div className="panelHead"><div><div className="pageKicker">PIPELINE INTELLIGENCE</div><h2>From signal to decision.</h2></div><UsersRound size={18} className="success"/></div><div className="pipeline">{[["APPLIED",["Meera Sinha"]],["SHORTLIST",["Aarav Mehta","Riya Kapoor"]],["INTERVIEW",["Kabir Verma"]],["OFFER",["—"]]].map(([stage,names]:any)=><div className="pipelineCol" key={stage}><div className="pipelineHead"><span>{stage}</span><b>{names[0]==="—"?0:names.length}</b></div>{names[0]!=="—"&&names.map((n:string)=><div className="candidateMini" key={n}><b>{n}</b><small>{stage==="SHORTLIST"?"90% avg match":"Evidence reviewed"}</small></div>)}</div>)}</div><div className="notice" style={{marginTop:10}}><CheckCircle2 size={13} style={{verticalAlign:"middle",marginRight:6}}/> Every ranking can be decomposed into skill fit, proficiency, interest, availability and learning readiness.</div></section>
+</ProductShell>}

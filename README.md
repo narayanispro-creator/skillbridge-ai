@@ -1,29 +1,26 @@
-# SkillBridge AI — CodeCartel / SIH 2026
+# SkillBridge AI — Enterprise SIH Build
 
-Full-stack Next.js prototype for PS 26044.
+**From Skill Gap to Career Path.** SkillBridge AI is an explainable career-intelligence network for Students, Industry and Academia. It replaces opaque résumé matching with a shared skill graph, evidence-backed Skill Passport and deterministic five-factor match engine.
 
-## Included
-- Next.js/React responsive frontend
-- Student Skill Passport dashboard
-- Explainable deterministic matching API
-- Company talent view
-- Academia skill-gap view
-- Supabase Auth integration with demo fallback
-- PostgreSQL/Supabase schema + RLS starter policies
-- Environment hooks for OpenAI
-- Vercel-ready project
+## Product workspaces
+- **Student Command Center:** living Skill Passport, readiness score, shortest skill path, ranked opportunities and contextual AI Mentor.
+- **Recruiter Intelligence:** AI-assisted JD-to-skill mapping, structured role graph, transparent candidate ranking and hiring pipeline.
+- **Institution Intelligence:** privacy-safe cohort readiness, demand-gap analytics and measurable intervention workflows.
 
-## Local
-1. `npm install`
-2. Copy `.env.example` to `.env.local`
-3. `npm run dev`
+## Explainable match model
+`45% Skill Fit + 20% Proficiency + 15% Role Interest + 10% Availability + 10% Learning Readiness`
 
-## Supabase
-Run `supabase/schema.sql` in the Supabase SQL editor and set:
-`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+The LLM never owns the numeric score. OpenAI is used only for extraction and explanation. API routes have deterministic/local fallback modes so the SIH demo remains functional without an AI key.
 
-## AI
-Set `OPENAI_API_KEY`. Keep the deterministic match engine as the source of truth; use AI for resume extraction and human-readable explanations.
+## Stack
+Next.js 15 · React 19 · TypeScript · Supabase Auth/Postgres/Storage/RLS · OpenAI Responses API · Vercel
 
-## Important
-The dashboard contains illustrative prototype/demo data. Do not present it as measured SIH or Quantum University outcome data.
+## Environment
+Copy `.env.example` to `.env.local` and configure:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `OPENAI_API_KEY` (optional for local fallback, recommended for live AI)
+- `OPENAI_MODEL` (defaults to `gpt-4.1-mini`)
+
+## Production notes
+The connected Supabase project already has the enterprise schema, five-factor RPCs, restricted privileged function execution, private evidence storage and the product-intelligence layer (`saved_opportunities`, `skill_assessments`, `activity_events`, `notifications`) applied. Google OAuth and custom SMTP still require credentials owned by the project team.

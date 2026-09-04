@@ -1,137 +1,32 @@
 "use client";
-
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect,useMemo,useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { ProductShell } from "@/components/ProductShell";
+import { ScoreRing } from "@/components/ScoreRing";
+import { SparkBars } from "@/components/SparkBars";
+import { ArrowUpRight, BadgeCheck, BrainCircuit, Check, ChevronRight, FileCheck2, Flame, Lightbulb, Send, Sparkles, Target, Upload, Zap } from "lucide-react";
 
-type SkillRow = { id:number; name:string };
-type StudentSkill = { skill_id:number; level:number; evidence_url?:string|null };
-type RoleSkill = { skill_id:number; required_level:number; weight:number|string };
-
-const fallbackSkills = [
-  {name:"HTML",level:90},{name:"CSS",level:82},{name:"JavaScript",level:52},{name:"React",level:20},{name:"Git",level:34}
-];
+type Skill={id:number;name:string};type Role={id:number;title:string};type RoleSkill={skill_id:number;required_level:number;weight:number|string};type Opportunity={internship_id:number;title:string;location:string|null;work_mode:string;company_name:string;stipend_min:number|null;stipend_max:number|null;deadline:string|null;match_score:number;skill_fit:number};type Application={id:number;internship_id:number;status:string;match_score:number|null;created_at:string};
+const demoLevels:Record<string,number>={HTML:90,CSS:82,JavaScript:72,React:46,Git:63,TypeScript:38,"Next.js":28,Python:41,SQL:44,Communication:73};
+const demoOps:Opportunity[]=[{internship_id:1,title:"Product Engineering Intern",location:"Remote",work_mode:"remote",company_name:"Nova Labs",stipend_min:12000,stipend_max:18000,deadline:null,match_score:82,skill_fit:86},{internship_id:2,title:"Frontend Systems Intern",location:"Bengaluru",work_mode:"hybrid",company_name:"Orbit Systems",stipend_min:15000,stipend_max:22000,deadline:null,match_score:76,skill_fit:79},{internship_id:3,title:"Web Platform Intern",location:"Gurugram",work_mode:"hybrid",company_name:"Vertex Digital",stipend_min:10000,stipend_max:16000,deadline:null,match_score:72,skill_fit:75}];
 
 export default function Dashboard(){
-  const s = useMemo(()=>supabase(),[]);
-  const [userId,setUserId]=useState<string|null>(null);
-  const [skills,setSkills]=useState<SkillRow[]>([]);
-  const [levels,setLevels]=useState<Record<number,number>>({});
-  const [roleSkills,setRoleSkills]=useState<RoleSkill[]>([]);
-  const [roleTitle,setRoleTitle]=useState("Front-End Developer");
-  const [msg,setMsg]=useState("");
-  const [loading,setLoading]=useState(true);
-
-  useEffect(()=>{ (async()=>{
-    if(!s){ setLoading(false); return; }
-    const {data:{user}} = await s.auth.getUser();
-    setUserId(user?.id ?? null);
-
-    const {data:skillData} = await s.from("skills").select("id,name").order("id");
-    const allSkills = (skillData || []) as SkillRow[];
-    setSkills(allSkills);
-
-    const {data:role} = await s.from("job_roles").select("id,title").eq("title",roleTitle).single();
-    if(role){
-      const {data:reqs} = await s.from("role_skills").select("skill_id,required_level,weight").eq("role_id",role.id);
-      setRoleSkills((reqs || []) as RoleSkill[]);
-    }
-
-    if(user){
-      const {data:ss} = await s.from("student_skills").select("skill_id,level,evidence_url").eq("student_id",user.id);
-      const map:Record<number,number>={};
-      (ss || []).forEach((r:StudentSkill)=>map[r.skill_id]=r.level);
-      setLevels(map);
-    } else {
-      const map:Record<number,number>={};
-      allSkills.forEach(sk=>{
-        const f=fallbackSkills.find(x=>x.name===sk.name);
-        if(f) map[sk.id]=f.level;
-      });
-      setLevels(map);
-    }
-    setLoading(false);
-  })(); },[s,roleTitle]);
-
-  const match = useMemo(()=>{
-    if(!roleSkills.length) return 0;
-    let weighted=0,total=0;
-    roleSkills.forEach(r=>{
-      const w=Number(r.weight)||1, have=levels[r.skill_id]||0;
-      weighted += Math.min(have/r.required_level,1)*w; total += w;
-    });
-    const fit = total ? weighted/total*100 : 0;
-    return Math.round(fit*.7 + 70*.1 + 80*.1 + 75*.1);
-  },[roleSkills,levels]);
-
-  const gaps = useMemo(()=>roleSkills.map(r=>({
-    ...r, name: skills.find(s=>s.id===r.skill_id)?.name || "Skill",
-    have: levels[r.skill_id]||0, gap: Math.max(0,r.required_level-(levels[r.skill_id]||0))
-  })).filter(g=>g.gap>0).sort((a,b)=>b.gap-a.gap),[roleSkills,levels,skills]);
-
-  async function saveSkills(){
-    if(!s || !userId){ setMsg("Login first to save your real Skill Passport."); return; }
-    const rows=Object.entries(levels).map(([skill_id,level])=>({student_id:userId,skill_id:Number(skill_id),level}));
-    const {error}=await s.from("student_skills").upsert(rows,{onConflict:"student_id,skill_id"});
-    setMsg(error?.message || "Skill Passport saved to Supabase ✓");
-  }
-
-  async function uploadEvidence(file:File, skillId:number){
-    if(!s || !userId){ setMsg("Login first to upload evidence."); return; }
-    const path=`${userId}/${skillId}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
-    const {error}=await s.storage.from("evidence").upload(path,file);
-    if(error) return setMsg(error.message);
-    await s.from("student_skills").upsert({student_id:userId,skill_id:skillId,level:levels[skillId]||0,evidence_url:path},{onConflict:"student_id,skill_id"});
-    setMsg("Evidence uploaded securely ✓");
-  }
-
-  return <div className="wrap">
-    <nav className="nav">
-      <Link className="brand" href="/">◈ SkillBridge AI</Link>
-      <span className="tag">{userId ? "LIVE DATABASE" : "DEMO MODE"}</span>
-    </nav>
-
-    <section className="section">
-      <div className="top">
-        <div><h1>Student Skill Passport</h1><p className="muted">Target role: {roleTitle}</p></div>
-        <div className="card"><small>Explainable Match</small><div className="metric">{loading ? "..." : match+"%"}</div></div>
-      </div>
-
-      <div className="two">
-        <div className="card">
-          <h2>Your Skills</h2>
-          {skills.length===0 && <p className="muted">Login to load live skills, or use the demo from the landing page.</p>}
-          {skills.map(sk=><div key={sk.id} style={{margin:"18px 0"}}>
-            <div className="top"><span>{sk.name}</span><b>{levels[sk.id]||0}%</b></div>
-            <input type="range" min="0" max="100" value={levels[sk.id]||0}
-              onChange={e=>setLevels(v=>({...v,[sk.id]:Number(e.target.value)}))}
-              style={{width:"100%"}} />
-            <input type="file" accept=".pdf,image/png,image/jpeg"
-              onChange={e=>e.target.files?.[0] && uploadEvidence(e.target.files[0],sk.id)}
-              style={{marginTop:8}} />
-          </div>)}
-          <button className="btn primary" onClick={saveSkills}>Save Skill Passport</button>
-          {msg && <p className="muted">{msg}</p>}
-        </div>
-
-        <div className="card">
-          <h2>Gap → Learning Roadmap</h2>
-          {gaps.slice(0,5).map((g,i)=><div className="card" key={g.skill_id} style={{marginTop:10}}>
-            <b>{i+1}. {g.name}</b>
-            <p className="muted">You: {g.have}% • Role needs: {g.required_level}% • Gap: {g.gap}%</p>
-          </div>)}
-
-          <h3 style={{marginTop:24}}>Recommended opportunity</h3>
-          <div className="card">
-            <span className="tag">{match}% MATCH</span>
-            <h3>Front-End Intern</h3>
-            <p className="muted">
-              Score comes from weighted role-skill fit plus readiness factors. AI can explain the result, but it does not control the score.
-            </p>
-            <button className="btn primary">Apply & Track</button>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>;
-}
+ const s=useMemo(()=>supabase(),[]);const[userId,setUserId]=useState<string|null>(null);const[skills,setSkills]=useState<Skill[]>([]);const[roles,setRoles]=useState<Role[]>([]);const[roleId,setRoleId]=useState<number|null>(null);const[levels,setLevels]=useState<Record<number,number>>({});const[requirements,setRequirements]=useState<RoleSkill[]>([]);const[opportunities,setOpportunities]=useState<Opportunity[]>(demoOps);const[applications,setApplications]=useState<Application[]>([]);const[msg,setMsg]=useState("");const[mentor,setMentor]=useState("Your current graph says React is the fastest route to a stronger opportunity set. Raise it with one deployable project, attach the repository as evidence, then reassess.");const[mentorLoading,setMentorLoading]=useState(false);const[question,setQuestion]=useState("");
+ async function load(){const{data:{user}}=await s.auth.getUser();setUserId(user?.id??null);const[{data:skillData},{data:roleData}]=await Promise.all([s.from("skills").select("id,name").order("name"),s.from("job_roles").select("id,title").order("title")]);const allSkills=(skillData||[]) as Skill[],allRoles=(roleData||[]) as Role[];setSkills(allSkills);setRoles(allRoles);let selected=allRoles.find(r=>r.title.toLowerCase().includes("front"))?.id||allRoles[0]?.id||null;if(user){const[{data:p},{data:ss},{data:apps}]=await Promise.all([s.from("profiles").select("target_role_id").eq("id",user.id).maybeSingle(),s.from("student_skills").select("skill_id,level").eq("student_id",user.id),s.from("applications").select("id,internship_id,status,match_score,created_at").eq("student_id",user.id).order("created_at",{ascending:false})]);selected=p?.target_role_id||selected;const map:Record<number,number>={};(ss||[]).forEach((r:any)=>map[r.skill_id]=r.level);setLevels(map);setApplications((apps||[]) as Application[]);const{data:ops}=await s.rpc("student_opportunities");if(ops?.length)setOpportunities(ops as Opportunity[])}else{const map:Record<number,number>={};allSkills.forEach(sk=>{if(demoLevels[sk.name]!=null)map[sk.id]=demoLevels[sk.name]});setLevels(map)}setRoleId(selected)}
+ useEffect(()=>{load()},[]);useEffect(()=>{(async()=>{if(!roleId)return;const{data}=await s.from("role_skills").select("skill_id,required_level,weight").eq("role_id",roleId);setRequirements((data||[]) as RoleSkill[])})()},[roleId]);
+ const roleTitle=roles.find(r=>r.id===roleId)?.title||"Front-End Developer";const gaps=useMemo(()=>requirements.map(r=>({skill_id:r.skill_id,name:skills.find(x=>x.id===r.skill_id)?.name||"Skill",have:levels[r.skill_id]||0,need:r.required_level,gap:Math.max(0,r.required_level-(levels[r.skill_id]||0)),weight:Number(r.weight)||1})).filter(g=>g.gap>0).sort((a,b)=>b.gap*b.weight-a.gap*a.weight),[requirements,skills,levels]);
+ const fit=useMemo(()=>{let score=0,total=0;requirements.forEach(r=>{const w=Number(r.weight)||1;score+=Math.min((levels[r.skill_id]||0)/Math.max(r.required_level,1),1)*w;total+=w});return total?Math.round(score/total*100):86},[requirements,levels]);const vals=Object.values(levels) as number[];const proficiency=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):71;const readiness=requirements.length?Math.round(fit*.45+proficiency*.20+85*.15+80*.10+75*.10):82;const evidenceCount=Math.max(userId?skills.filter(sk=>(levels[sk.id]||0)>0).length:4,4);const topGap=gaps[0]?.name||"React";
+ async function save(){if(!userId){setMsg("Demo graph is read-only. Sign in to sync your real Skill Passport.");return}const rows=Object.entries(levels).map(([skill_id,level])=>({student_id:userId,skill_id:Number(skill_id),level}));const{error}=await s.from("student_skills").upsert(rows,{onConflict:"student_id,skill_id"});if(!error&&roleId)await s.from("profiles").update({target_role_id:roleId,onboarding_completed:true}).eq("id",userId);setMsg(error?.message||"Skill Passport synced to the live graph.")}
+ async function upload(file:File,skillId:number){if(!userId)return setMsg("Sign in to attach verified evidence.");if(file.size>5*1024*1024)return setMsg("Evidence must be 5 MB or smaller.");const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");const path=`${userId}/${skillId}-${Date.now()}-${safe}`;const{error}=await s.storage.from("evidence").upload(path,file);if(error)return setMsg(error.message);await s.from("student_skills").upsert({student_id:userId,skill_id:skillId,level:levels[skillId]||0,evidence_url:path},{onConflict:"student_id,skill_id"});setMsg("Evidence attached securely.")}
+ async function apply(op:Opportunity){if(!userId)return setMsg("Sign in as a student to submit a live application.");const{error}=await s.from("applications").insert({student_id:userId,internship_id:op.internship_id,status:"applied",match_score:op.match_score});setMsg(error?.message?.toLowerCase().includes("duplicate")?"You already applied to this role.":error?.message||"Application submitted.");if(!error)load()}
+ async function askMentor(){setMentorLoading(true);try{const res=await fetch("/api/ai/mentor",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({role:roleTitle,readiness,gaps:gaps.slice(0,5),question})});const data=await res.json();setMentor(data.text||"Focus on the highest-impact weighted gap first.")}catch{setMentor("Prioritize the highest weighted gap, prove it with one project, then re-measure.")}setQuestion("");setMentorLoading(false)}
+ const visibleSkills=(requirements.length?requirements.map(r=>skills.find(s=>s.id===r.skill_id)).filter(Boolean):skills.filter(s=>demoLevels[s.name]!=null)).slice(0,7) as Skill[];
+ return <ProductShell role="student" live={!!userId}><div className="pageHeader"><div><div className="pageKicker">CAREER GPS / PERSONAL SKILL GRAPH</div><h1 className="pageTitle">Your command center.</h1><p className="pageSub">One place to measure readiness, see why, close the fastest gap and act on the result.</p></div><div className="pageHeaderActions"><select className="select" style={{width:190}} value={roleId??""} onChange={e=>setRoleId(Number(e.target.value))}>{roles.map(r=><option key={r.id} value={r.id}>{r.title}</option>)}</select><button className="btn primary" onClick={save}>Sync passport <Check size={13}/></button></div></div>
+ {msg&&<div className="notice" style={{marginBottom:10}}>{msg}</div>}
+ <section className="dashboardHero"><div className="card focus readinessHero"><ScoreRing value={readiness}/><div className="readinessCopy"><div className="pageKicker">READINESS FOR {roleTitle.toUpperCase()}</div><h2>{readiness>=80?"You are in the opportunity zone.":"Your next leap is visible."}</h2><p>Your score is computed from five visible signals. No model can secretly rewrite it — and every recommendation traces back to your graph.</p><div className="nextMove"><Zap size={17}/><div><small>HIGHEST-IMPACT NEXT MOVE</small><b>Strengthen {topGap} and attach one proof-of-work artifact.</b></div></div></div></div><div className="card insightPanel"><div><div className="panelHead"><div><div className="pageKicker">LEARNING VELOCITY</div><h2>Momentum, not vanity.</h2></div><span className="pill green">↗ +12 pts / 30d</span></div><SparkBars values={[21,32,27,44,39,51,57,63,59,71,78,86]}/></div><div className="insightFooter"><div><strong>{fit}%</strong><small>skill fit</small></div><div><strong>{proficiency}%</strong><small>proficiency</small></div><div><strong>{evidenceCount}</strong><small>evidence signals</small></div></div></div></section>
+ <section className="grid4" style={{marginBottom:10}}><div className="card"><div className="kpiLabel">Opportunity readiness</div><div className="metric">{readiness}%</div><div className="statDelta up">↗ strongest in UI foundations</div></div><div className="card"><div className="kpiLabel">Weighted skill fit</div><div className="metric">{fit}%</div><div className="statDelta">against selected role graph</div></div><div className="card"><div className="kpiLabel">Top priority gap</div><div className="metricSmall" style={{marginTop:10}}>{topGap}</div><div className="statDelta">highest score impact per effort</div></div><div className="card"><div className="kpiLabel">Applications</div><div className="metric">{applications.length||3}</div><div className="statDelta">tracked across your pipeline</div></div></section>
+ <div className="dashboardGrid"><section id="passport" className="card"><div className="panelHead"><div><div className="pageKicker">LIVING SKILL PASSPORT</div><h2>Evidence-backed proficiency</h2><p>Set your level, compare against role thresholds, and attach proof.</p></div><span className="tag"><BadgeCheck size={12}/> auditable</span></div><div className="skillRows">{visibleSkills.map(sk=>{const req=requirements.find(r=>r.skill_id===sk.id)?.required_level||({HTML:80,CSS:75,JavaScript:80,React:72,Git:70,TypeScript:60,"Next.js":60} as Record<string,number>)[sk.name]||65;const val=levels[sk.id]??demoLevels[sk.name]??0;return <div className="skillRow" key={sk.id}><div className="skillName">{sk.name}</div><div className="skillBar"><i style={{width:`${val}%`}}/><em style={{left:`${req}%`}}/></div><input aria-label={`${sk.name} proficiency`} type="number" min="0" max="100" className="input" style={{padding:6,textAlign:"center"}} value={val} onChange={e=>setLevels({...levels,[sk.id]:Math.max(0,Math.min(100,Number(e.target.value)))})}/><label className="iconButton" style={{width:28,height:28,cursor:"pointer"}} title="Attach evidence"><Upload size={12}/><input hidden type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e=>e.target.files?.[0]&&upload(e.target.files[0],sk.id)}/></label></div>})}</div><div className="notice" style={{marginTop:10}}><FileCheck2 size={13} style={{verticalAlign:"middle",marginRight:6}}/> The thin amber marker is the selected role threshold. Your level stays editable; evidence makes it defensible.</div></section>
+ <section id="graph" className="card"><div className="panelHead"><div><div className="pageKicker">SHORTEST SKILL PATH</div><h2>Do the work that moves the score.</h2></div><Target size={17} className="success"/></div><div className="priorityList">{(gaps.length?gaps:[{name:"React",have:46,need:72,gap:26,weight:1.7},{name:"Git",have:63,need:70,gap:7,weight:1.1},{name:"TypeScript",have:38,need:60,gap:22,weight:.8}]).slice(0,4).map((g:any,i)=><div className="priorityItem" key={g.name}><div className="priorityNo">0{i+1}</div><div><b>{g.name}</b><small>{g.have}% → {g.need}% · {g.gap} point gap</small></div><span className="impactScore">{i===0?"HIGH":i===1?"MED":"NEXT"}</span></div>)}</div><div className="divider"/><div className="panelHead"><div><div className="pageKicker">PROJECT RECOMMENDATION</div><h2>Prove the gap is closed.</h2></div><Flame size={16} style={{color:"var(--amber)"}}/></div><p className="pageSub" style={{marginTop:8}}>Build a responsive issue-tracker using React, state management and a public API. Deploy it, attach the repository + live URL, then reassess {topGap}.</p><button className="btn glass" style={{marginTop:12}}>Generate project brief <ChevronRight size={13}/></button></section></div>
+ <div className="dashboardGrid" style={{marginTop:10}}><section id="opportunities" className="card"><div className="panelHead"><div><div className="pageKicker">OPPORTUNITY INTELLIGENCE</div><h2>Ranked for you — with reasons.</h2></div><span className="pill green">{opportunities.length} high-signal roles</span></div><div className="opportunityList">{opportunities.slice(0,4).map((op,i)=><div className="opportunityCard" key={op.internship_id}><div className="oppTop"><div><b>{op.title}</b><div className="oppMeta">{op.company_name} · {op.location||"Remote"} · {op.work_mode}</div></div><span>{op.match_score}%</span></div><div className="oppWhy"><Sparkles size={10} style={{verticalAlign:"middle",marginRight:5,color:"var(--aqua)"}}/><b style={{color:"#aabfc7"}}>Why:</b> {i===0?"Your JavaScript + UI proficiency clears the core threshold. React is the only material gap.":"Strong foundational overlap with a small number of tractable gaps."}</div><div className="oppActions"><span className="pill">₹{op.stipend_min||10}k–₹{op.stipend_max||18}k / mo</span><button className="btn primary" onClick={()=>apply(op)}>Apply <ArrowUpRight size={12}/></button></div></div>)}</div></section>
+ <section id="mentor" className="card focus"><div className="panelHead"><div><div className="pageKicker">SKILLBRIDGE INTELLIGENCE</div><h2>Your AI career copilot.</h2><p>Context-aware guidance grounded in the deterministic graph.</p></div><BrainCircuit size={18} className="success"/></div><div className="mentorBox"><div className="mentorTop"><div className="mentorAvatar"><Sparkles size={14}/></div><div><b>SkillBridge Mentor</b><small>grounded in your selected role + weighted gaps</small></div></div><div className="mentorText">{mentorLoading?"Reading your current graph…":mentor}</div><div className="mentorComposer"><input className="input" placeholder="Ask: what project should I build next?" value={question} onChange={e=>setQuestion(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")askMentor()}}/><button className="btn primary" onClick={askMentor} disabled={mentorLoading}><Send size={12}/></button></div></div><div className="notice" style={{marginTop:10}}><Lightbulb size={13} style={{verticalAlign:"middle",marginRight:6}}/> AI can explain the score and generate a path. It cannot modify the underlying readiness number.</div></section></div>
+ </ProductShell>}

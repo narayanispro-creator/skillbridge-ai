@@ -1,0 +1,15 @@
+create extension if not exists "uuid-ossp";
+create table profiles(id uuid primary key references auth.users(id) on delete cascade, role text check(role in ('student','company','college')), full_name text, college text, created_at timestamptz default now());
+create table skills(id bigserial primary key,name text unique not null);
+create table student_skills(id bigserial primary key,student_id uuid references profiles(id) on delete cascade,skill_id bigint references skills(id),level int check(level between 0 and 100),evidence_url text,unique(student_id,skill_id));
+create table job_roles(id bigserial primary key,title text not null,description text);
+create table role_skills(id bigserial primary key,role_id bigint references job_roles(id) on delete cascade,skill_id bigint references skills(id),required_level int check(required_level between 0 and 100),weight numeric default 1);
+create table internships(id bigserial primary key,company_id uuid references profiles(id),title text not null,description text,location text,active boolean default true,created_at timestamptz default now());
+create table internship_skills(id bigserial primary key,internship_id bigint references internships(id) on delete cascade,skill_id bigint references skills(id),required_level int,weight numeric default 1);
+create table applications(id bigserial primary key,internship_id bigint references internships(id),student_id uuid references profiles(id),status text default 'applied',match_score int,created_at timestamptz default now());
+alter table profiles enable row level security; alter table student_skills enable row level security; alter table applications enable row level security;
+create policy "profiles self read" on profiles for select using(auth.uid()=id);
+create policy "profiles self update" on profiles for update using(auth.uid()=id);
+create policy "student skills self" on student_skills for all using(auth.uid()=student_id) with check(auth.uid()=student_id);
+create policy "applications self" on applications for all using(auth.uid()=student_id) with check(auth.uid()=student_id);
+insert into skills(name) values ('HTML'),('CSS'),('JavaScript'),('React'),('Git'),('Python'),('SQL') on conflict do nothing;

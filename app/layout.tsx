@@ -1,1 +1,11 @@
-import "./globals.css"; export const metadata={title:"SkillBridge AI",description:"From Skill Gap to Career Path"}; export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body>{children}</body></html>}
+import "./globals.css";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "SkillBridge AI — Explainable Career Intelligence",
+  description: "From skill gap to career path. Explainable skill intelligence for students, industry and institutions.",
+};
+
+export default function RootLayout({children}:{children:React.ReactNode}){
+  return <html lang="en"><body>{children}</body></html>
+}
