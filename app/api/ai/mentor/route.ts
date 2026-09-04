@@ -2,46 +2,72 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const catalog = ["JavaScript", "React", "Git", "TypeScript", "Next.js", "HTML", "CSS", "Python", "SQL", "Communication"];
+type Gap = {
+  name?: string;
+  have?: number;
+  need?: number;
+  gap?: number;
+  weight?: number;
+};
 
-function localExtract(description: string) {
-  const text = description.toLowerCase();
-  return catalog
-    .filter((skill) => text.includes(skill.toLowerCase()))
-    .slice(0, 8)
-    .map((name, i) => ({
-      name,
-      required_level: i < 2 ? 78 : i < 4 ? 68 : 60,
-      weight: i < 2 ? 1.6 : i < 4 ? 1.2 : 1,
-    }));
+type OpenAIError = {
+  error?: {
+    message?: string;
+    type?: string;
+    code?: string | null;
+  };
+};
+
+function fallback(role: string, gaps: Gap[], readiness: number, question: string) {
+  const top = (gaps || []).slice(0, 3);
+  const lead = top[0];
+
+  if (question.trim()) {
+    return `For ${role}, your current readiness is ${readiness}%. ${
+      lead ? `${lead.name} is the highest-impact gap (${lead.have}% → ${lead.need}%). ` : ""
+    }Use your next project to prove that exact capability, publish the work, attach evidence to your Skill Passport, then reassess. Your match score itself stays deterministic.`;
+  }
+
+  return `Your readiness for ${role} is ${readiness}%. ${
+    lead ? `Prioritize ${lead.name} first: move from ${lead.have}% toward ${lead.need}% with one deployable proof-of-work project. ` : ""
+  }Then attach evidence and reassess. SkillBridge AI explains the path; it never changes the numeric score.`;
 }
 
 function outputText(payload: any): string {
-  if (typeof payload?.output_text === "string" && payload.output_text.trim()) return payload.output_text.trim();
+  if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
+    return payload.output_text.trim();
+  }
+
   const chunks: string[] = [];
   for (const item of Array.isArray(payload?.output) ? payload.output : []) {
     for (const content of Array.isArray(item?.content) ? item.content : []) {
-      if ((content?.type === "output_text" || content?.type === "text") && typeof content?.text === "string") chunks.push(content.text);
+      if ((content?.type === "output_text" || content?.type === "text") && typeof content?.text === "string") {
+        chunks.push(content.text);
+      }
     }
   }
   return chunks.join("\n").trim();
 }
 
 export async function POST(req: Request) {
-  const { description = "" } = await req.json();
-  const text = String(description).trim();
-  if (!text) return NextResponse.json({ skills: [], mode: "empty" });
-
-  const fallback = localExtract(text);
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    console.warn("[SkillBridge AI] OPENAI_API_KEY missing for JD extraction.");
-    return NextResponse.json({ skills: fallback, mode: "local-extractor", diagnostic: "missing_api_key" });
-  }
-
-  const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
-
   try {
+    const body = await req.json();
+    const role = String(body.role || "your target role").slice(0, 120);
+    const readiness = Math.max(0, Math.min(100, Number(body.readiness || 0)));
+    const gaps = Array.isArray(body.gaps) ? body.gaps.slice(0, 6) : [];
+    const question = String(body.question || "").slice(0, 700);
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      console.warn("[SkillBridge AI] OPENAI_API_KEY is missing; using deterministic fallback.");
+      return NextResponse.json({
+        text: fallback(role, gaps, readiness, question),
+        mode: "deterministic-fallback",
+        diagnostic: "missing_api_key",
+      });
+    }
+
+    const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -54,9 +80,12 @@ export async function POST(req: Request) {
           {
             role: "system",
             content:
-              "Extract only concrete job skills from the internship description. Return a strict JSON array, no markdown. Each object must contain: name (canonical concise skill), required_level integer 0-100, weight number 0.5-2.0. Maximum 8. Core must-have skills get higher weight. Do not invent technologies absent from the description.",
+              "You are SkillBridge Mentor, an evidence-first career copilot. Be concise, specific and practical. Ground every recommendation in the provided role, deterministic readiness and weighted gaps. Never invent, alter or recalculate numeric scores. Never use hype. Prefer one concrete project/action over generic course lists. Maximum 5 short sentences unless the user explicitly asks for a plan.",
           },
-          { role: "user", content: text.slice(0, 5000) },
+          {
+            role: "user",
+            content: JSON.stringify({ role, readiness, gaps, question }),
+          },
         ],
         max_output_tokens: 420,
       }),
@@ -66,46 +95,47 @@ export async function POST(req: Request) {
     const payload = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      const err = payload as OpenAIError;
       const diagnostic = {
         status: response.status,
-        type: payload?.error?.type || "unknown",
-        code: payload?.error?.code || "unknown",
-        message: String(payload?.error?.message || "OpenAI request failed").slice(0, 240),
+        type: err?.error?.type || "unknown",
+        code: err?.error?.code || "unknown",
+        message: String(err?.error?.message || "OpenAI request failed").slice(0, 240),
         model,
       };
-      console.error("[SkillBridge AI] OpenAI JD extraction failed", diagnostic);
-      return NextResponse.json({ skills: fallback, mode: "provider-fallback", diagnostic: `${diagnostic.status}:${diagnostic.code}` });
+      console.error("[SkillBridge AI] OpenAI mentor request failed", diagnostic);
+
+      return NextResponse.json({
+        text: fallback(role, gaps, readiness, question),
+        mode: "provider-fallback",
+        diagnostic: `${diagnostic.status}:${diagnostic.code}`,
+      });
     }
 
-    const raw = outputText(payload).replace(/```json|```/g, "").trim();
-    let skills: any[] = [];
-    try {
-      skills = JSON.parse(raw);
-    } catch {
-      console.error("[SkillBridge AI] JD extraction returned invalid JSON", { model, outputLength: raw.length });
+    const text = outputText(payload);
+    if (!text) {
+      console.error("[SkillBridge AI] OpenAI mentor returned no text", { model });
+      return NextResponse.json({
+        text: fallback(role, gaps, readiness, question),
+        mode: "empty-provider-fallback",
+        diagnostic: "empty_output",
+      });
     }
 
-    skills = Array.isArray(skills)
-      ? skills
-          .filter((x) => x && typeof x.name === "string")
-          .slice(0, 8)
-          .map((x) => ({
-            name: String(x.name).slice(0, 60),
-            required_level: Math.max(0, Math.min(100, Math.round(Number(x.required_level) || 60))),
-            weight: Math.max(0.5, Math.min(2, Number(x.weight) || 1)),
-          }))
-      : [];
-
-    return NextResponse.json({
-      skills: skills.length ? skills : fallback,
-      mode: skills.length ? "openai" : "local-fallback",
-      model,
-    });
+    return NextResponse.json({ text, mode: "openai", model });
   } catch (error: any) {
-    console.error("[SkillBridge AI] JD route exception", {
+    console.error("[SkillBridge AI] Mentor route exception", {
       name: error?.name || "Error",
-      message: String(error?.message || "Unknown JD error").slice(0, 240),
+      message: String(error?.message || "Unknown mentor error").slice(0, 240),
     });
-    return NextResponse.json({ skills: fallback, mode: "local-fallback", diagnostic: "route_exception" });
+
+    return NextResponse.json(
+      {
+        text: "The AI layer is temporarily unavailable. Your deterministic readiness, skill gaps and opportunity ranking are still available.",
+        mode: "safe-fallback",
+        diagnostic: "route_exception",
+      },
+      { status: 200 }
+    );
   }
 }
