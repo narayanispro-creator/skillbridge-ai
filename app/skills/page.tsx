@@ -3,14 +3,13 @@ import { ProductShell } from "@/components/ProductShell";
 import { useStudent, Skill, Evidence } from "@/components/StudentState";
 import { BadgeCheck, BookOpenCheck, ChevronRight, FileUp, Link2, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 const status=(n:number)=>n>=75?"Confident":n>=35?"Developing":"Learning";
 const tone=(n:number)=>n>=75?"strong":n>=35?"mid":"low";
 export default function SkillsPage(){
- const {skills,setSkills,addActivity}=useStudent(); const params=useSearchParams(); const [selectedId,setSelectedId]=useState<string|null>(null); const [add,setAdd]=useState(false); const [prefill,setPrefill]=useState(""); const [addProof,setAddProof]=useState(false);
+ const {skills,setSkills,addActivity}=useStudent(); const [selectedId,setSelectedId]=useState<string|null>(null); const [add,setAdd]=useState(false); const [prefill,setPrefill]=useState(""); const [addProof,setAddProof]=useState(false);
  const selected=skills.find(s=>s.id===selectedId)||null;
- useEffect(()=>{const name=params.get("skill");if(name){const found=skills.find(s=>s.name.toLowerCase()===name.toLowerCase());if(found)setSelectedId(found.id);else{setPrefill(name);setAdd(true)}}},[params,skills]);
+ useEffect(()=>{const name=new URLSearchParams(window.location.search).get("skill");if(name){const found=skills.find(s=>s.name.toLowerCase()===name.toLowerCase());if(found)setSelectedId(found.id);else{setPrefill(name);setAdd(true)}}},[skills]);
  const evidenceCount=useMemo(()=>skills.reduce((a,s)=>a+s.evidence.length,0),[skills]);
  const withProof=useMemo(()=>skills.filter(s=>s.evidence.length).length,[skills]);
  function addSkill(e:FormEvent<HTMLFormElement>){e.preventDefault();const f=new FormData(e.currentTarget);const name=String(f.get("name")||"").trim();const level=Math.max(0,Math.min(100,Number(f.get("level")||0)));if(!name)return;const found=skills.find(s=>s.name.toLowerCase()===name.toLowerCase());if(found){setSkills(x=>x.map(s=>s.id===found.id?{...s,level}:s));setSelectedId(found.id)}else{const s:Skill={id:`${name.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-${Date.now()}`,name,level,evidence:[]};setSkills(x=>[...x,s]);setSelectedId(s.id)}addActivity("skill",`Added or updated ${name} at ${level}%`);setPrefill("");setAdd(false);e.currentTarget.reset()}
