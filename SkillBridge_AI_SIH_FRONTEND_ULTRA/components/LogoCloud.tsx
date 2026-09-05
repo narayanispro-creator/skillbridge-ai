@@ -1,1 +1,0 @@
-export function LogoCloud(){return <div className="logoCloud"><span>SKILL GRAPH</span><b>01</b><span>EXPLAINABLE MATCH</span><b>02</b><span>EVIDENCE PASSPORT</span><b>03</b><span>ACADEMIA SIGNALS</span><b>04</b></div>}
