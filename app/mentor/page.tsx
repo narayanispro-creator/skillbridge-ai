@@ -1,0 +1,15 @@
+"use client";
+import { useState } from "react";
+import { ProductShell } from "@/components/ProductShell";
+import { ArrowUp, BrainCircuit, CalendarDays, Search, Sparkles, Target } from "lucide-react";
+const starters=[
+ {icon:Target,label:"Explain my skill gap",prompt:"Why is my Front-End readiness 56% and what should I improve first?"},
+ {icon:CalendarDays,label:"Plan my next 7 days",prompt:"Make me a realistic 7-day plan to improve my highest-impact skill gap."},
+ {icon:Search,label:"Analyse an internship",prompt:"How should I decide whether an internship is worth applying to based on my current skills?"},
+];
+export default function Mentor(){const[q,setQ]=useState("");const[loading,setLoading]=useState(false);const[messages,setMessages]=useState<{who:"ai"|"me";text:string}[]>([{who:"ai",text:"I know your current target role, readiness and main skill gaps. Ask me about what to learn, why a match looks the way it does, or how to prepare for an opportunity."}]);
+ async function ask(text=q){if(!text.trim()||loading)return;setMessages(m=>[...m,{who:"me",text}]);setQ("");setLoading(true);try{const r=await fetch("/api/ai/mentor",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({role:"Front-End Developer",readiness:56,gaps:[{name:"JavaScript",have:52,need:80,gap:28},{name:"Git",have:34,need:65,gap:31},{name:"React",have:20,need:70,gap:50}],question:text})});const d=await r.json();setMessages(m=>[...m,{who:"ai",text:d.text||"Focus on the highest-impact gap first, prove it with one project, then reassess."}])}catch{setMessages(m=>[...m,{who:"ai",text:"I could not reach the AI service right now. Your skill graph and deterministic readiness are still available."}])}setLoading(false)}
+ return <ProductShell role="student" live={false}><section className="mentorPage"><div className="mentorHeader"><div className="mentorIdentity"><span><BrainCircuit size={19}/></span><div><b>SkillBridge Mentor</b><small>Career copilot grounded in your Skill Passport</small></div></div><span className="groundedTag">Grounded · scores stay deterministic</span></div>
+ <div className="mentorConversation">{messages.map((m,i)=><div className={`chatRow ${m.who}`} key={i}>{m.who==="ai"&&<span className="aiMini"><Sparkles size={13}/></span>}<div>{m.text}</div></div>)}{loading&&<div className="chatRow ai"><span className="aiMini"><Sparkles size={13}/></span><div className="thinking">Reading your skill graph<span>•••</span></div></div>}</div>
+ <div className="mentorBottom"><div className="mentorStarters">{starters.map(({icon:Icon,label,prompt})=><button onClick={()=>ask(prompt)} key={label}><Icon size={14}/>{label}</button>)}</div><div className="mentorInput"><textarea rows={1} value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();ask()}}} placeholder="Ask about your skills, roadmap, internship or interview…"/><button onClick={()=>ask()} disabled={loading}><ArrowUp size={18}/></button></div><small className="mentorDisclaimer">AI explains your structured data. It cannot secretly change your official readiness or match score.</small></div>
+ </section></ProductShell>}
