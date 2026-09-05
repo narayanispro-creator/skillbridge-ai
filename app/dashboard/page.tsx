@@ -1,29 +1,21 @@
 "use client";
 import Link from "next/link";
 import { ProductShell } from "@/components/ProductShell";
-import { ArrowRight, BriefcaseBusiness, CheckCircle2, Clock3, Route, Sparkles, Target } from "lucide-react";
+import { useStudent } from "@/components/StudentState";
+import { getRole,gapsForRole,roleReadiness,roleEvidenceCoverage,OPPORTUNITIES,opportunityScore,nextBestAction } from "@/lib/student-intelligence";
+import { ArrowRight, BadgeCheck, BriefcaseBusiness, Compass, ShieldCheck, Sparkles, Target, UserRound } from "lucide-react";
 
 export default function Dashboard(){
-  return <ProductShell role="student" live={false}>
-    <section className="focusPage homeFocus">
-      <div className="focusEyebrow">SATURDAY · YOUR CAREER HOME</div>
-      <div className="homeWelcome">
-        <div><p className="focusHello">Good morning, Narayan.</p><h1>One clear move at a time.</h1><p className="focusLead">You are working toward <b>Front-End Developer</b>. SkillBridge has already chosen the highest-impact thing to do next.</p></div>
-        <div className="readinessDial"><span>56%</span><small>role ready</small></div>
-      </div>
-
-      <article className="nextActionCard">
-        <div className="nextActionIcon"><Target size={22}/></div>
-        <div className="nextActionBody"><span>YOUR NEXT MOVE</span><h2>Strengthen JavaScript before jumping deeper into React.</h2><p>Your foundations are strong, but JavaScript is the skill currently blocking the biggest part of your Front-End path.</p><div className="actionMeta"><span><Clock3 size={14}/> ~7 focused days</span><span><CheckCircle2 size={14}/> Add one proof project</span></div></div>
-        <Link href="/career" className="roundArrow" aria-label="Open career path"><ArrowRight size={19}/></Link>
-      </article>
-
-      <div className="homeSplit">
-        <Link href="/explore" className="quietPanel"><div className="quietIcon"><BriefcaseBusiness size={18}/></div><div><span>OPPORTUNITIES</span><h3>3 roles are realistic for you now.</h3><p>See the match reason before you apply.</p></div><ArrowRight size={18}/></Link>
-        <Link href="/mentor" className="quietPanel mentorQuiet"><div className="quietIcon"><Sparkles size={18}/></div><div><span>ASK MENTOR</span><h3>Turn your gap into a plan.</h3><p>Ask anything about your skills, path or an internship.</p></div><ArrowRight size={18}/></Link>
-      </div>
-
-      <div className="homeProgressLine"><div><span>THIS WEEK</span><b>2 of 4 actions completed</b></div><div className="thinProgress"><i style={{width:"50%"}}/></div><Link href="/skills">View skill passport <ArrowRight size={13}/></Link></div>
-    </section>
-  </ProductShell>
+ const {skills,profile,activity}=useStudent();
+ const role=getRole(profile.targetRole);const readiness=roleReadiness(skills,role);const proof=roleEvidenceCoverage(skills,role);const gaps=gapsForRole(skills,role);const action=nextBestAction(skills,profile);
+ const ranked=OPPORTUNITIES.map(o=>({o,score:opportunityScore(skills,profile,o)})).sort((a,b)=>b.score-a.score);const best=ranked[0];
+ const proofCount=skills.reduce((a,s)=>a+s.evidence.length,0);
+ return <ProductShell role="student" live={false}><section className="focusPage startupHome">
+  {!profile.onboardingComplete?<div className="emptyJourney startupEmpty"><div className="signalOrb"><Compass size={28}/></div><span>YOUR CAREER OS STARTS EMPTY</span><h1>No fake score. No fake skills. Start with you.</h1><p>Choose a target role, then add only the skills and evidence you actually have. Every score, roadmap and opportunity will derive from that single profile.</p><Link href="/onboarding" className="heroAction">Create my career graph <ArrowRight size={17}/></Link></div>:<>
+  <div className="homeCommand"><div className="homeCommandCopy"><div className="focusEyebrow">CAREER COMMAND CENTER</div><p className="focusHello">{profile.name ? `Hi, ${profile.name}.` : "Your career signal."}</p><h1>{action.title}</h1><p className="focusLead">{action.body}</p><div className="homeCommandActions"><Link className="heroAction" href={action.href}>Do this next <ArrowRight size={16}/></Link><Link className="ghostAction" href="/mentor"><Sparkles size={15}/> Ask Mentor why</Link></div></div><div className="signalScore"><span className="signalScoreLabel">READINESS</span><strong>{readiness}<sup>%</sup></strong><small>{role?.name||"No target"}</small><div className="signalScoreTrack"><i style={{width:`${readiness}%`}}/></div></div></div>
+  <div className="signalRail"><Link href="/skills"><BadgeCheck size={17}/><span><small>SKILL PASSPORT</small><b>{skills.length} skills · {proofCount} proof</b></span><ArrowRight size={15}/></Link><Link href="/career"><Target size={17}/><span><small>ACTIVE GAPS</small><b>{gaps.length?`${gaps.length} to close`:"No configured gap"}</b></span><ArrowRight size={15}/></Link><Link href="/skills"><ShieldCheck size={17}/><span><small>EVIDENCE SIGNAL</small><b>{proof}% role evidence</b></span><ArrowRight size={15}/></Link><Link href="/explore"><BriefcaseBusiness size={17}/><span><small>BEST SAMPLE MATCH</small><b>{best?`${best.score}% · ${best.o.role}`:"No match yet"}</b></span><ArrowRight size={15}/></Link></div>
+  <div className="homeDecisionGrid"><article className="decisionCard primaryDecision"><span>WHY THIS IS YOUR NEXT MOVE</span><h2>{gaps[0]?`${gaps[0].name} has the largest relative gap.`:"Your next action is derived from your live profile."}</h2><p>{gaps[0]?`Current ${gaps[0].current}% · role target ${gaps[0].target}% · gap ${gaps[0].gap} points. Change the skill and this recommendation changes too.`:"SkillBridge does not use a hidden chatbot score. The recommendation comes from structured role requirements and your saved state."}</p><Link href="/career">Open the explanation <ArrowRight size={15}/></Link></article><article className="decisionCard"><span>OPPORTUNITY SIGNAL</span><h2>{best&&best.score>0?`${best.o.role} is currently your strongest sample fit.`:"No opportunity has earned a match yet."}</h2><p>{best&&best.score>0?`${best.score}% based on skill fit, proficiency, role interest, availability and learning readiness.`:"Add real skills first. Opportunity scores stay at zero when your passport is empty."}</p><Link href="/explore">Inspect the match <ArrowRight size={15}/></Link></article></div>
+  <div className="activityLine"><span>RECENT SIGNAL</span><b>{activity[0]?.label||"No actions yet. Your real activity will appear here."}</b><small>{activity[0]?new Date(activity[0].at).toLocaleString():""}</small></div>
+  </>}
+ </section></ProductShell>
 }
