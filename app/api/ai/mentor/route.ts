@@ -1,3 +1,4 @@
+import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -8,14 +9,6 @@ type Gap = {
   need?: number;
   gap?: number;
   weight?: number;
-};
-
-type OpenAIError = {
-  error?: {
-    message?: string;
-    type?: string;
-    code?: string | null;
-  };
 };
 
 function fallback(role: string, gaps: Gap[], readiness: number, question: string) {
@@ -33,107 +26,95 @@ function fallback(role: string, gaps: Gap[], readiness: number, question: string
   }Then attach evidence and reassess. SkillBridge AI explains the path; it never changes the numeric score.`;
 }
 
-function outputText(payload: any): string {
-  if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
-    return payload.output_text.trim();
-  }
-
-  const chunks: string[] = [];
-  for (const item of Array.isArray(payload?.output) ? payload.output : []) {
-    for (const content of Array.isArray(item?.content) ? item.content : []) {
-      if ((content?.type === "output_text" || content?.type === "text") && typeof content?.text === "string") {
-        chunks.push(content.text);
-      }
-    }
-  }
-  return chunks.join("\n").trim();
+function safeError(error: any) {
+  return {
+    name: error?.name,
+    status: error?.status,
+    code: error?.code,
+    type: error?.type,
+    message: error?.message,
+    request_id: error?.request_id,
+  };
 }
 
 export async function POST(req: Request) {
+  let role = "your target role";
+  let readiness = 0;
+  let gaps: Gap[] = [];
+  let question = "";
+
   try {
     const body = await req.json();
-    const role = String(body.role || "your target role").slice(0, 120);
-    const readiness = Math.max(0, Math.min(100, Number(body.readiness || 0)));
-    const gaps = Array.isArray(body.gaps) ? body.gaps.slice(0, 6) : [];
-    const question = String(body.question || "").slice(0, 700);
-    const apiKey = process.env.OPENAI_API_KEY;
+    role = String(body.role || role).slice(0, 120);
+    readiness = Math.max(0, Math.min(100, Number(body.readiness || 0)));
+    gaps = Array.isArray(body.gaps) ? body.gaps.slice(0, 6) : [];
+    question = String(body.question || "").slice(0, 700);
 
-    if (!apiKey) {
-      console.warn("[SkillBridge AI] OPENAI_API_KEY is missing; using deterministic fallback.");
-      return NextResponse.json({
-        text: fallback(role, gaps, readiness, question),
-        mode: "deterministic-fallback",
-        diagnostic: "missing_api_key",
-      });
+    const systemPrompt =
+      "You are SkillBridge Mentor, an evidence-first career copilot. Be concise, specific and practical. Ground every recommendation in the provided role, deterministic readiness and weighted skill gaps. Never invent, alter or recalculate numeric scores. Never use hype. Prefer one concrete project or action over generic course lists. Maximum 5 short sentences unless the user explicitly asks for a plan.";
+
+    const userPrompt = JSON.stringify({ role, readiness, gaps, question });
+
+    // Free-first provider for the SIH prototype.
+    if (process.env.GROQ_API_KEY) {
+      try {
+        const groq = new OpenAI({
+          apiKey: process.env.GROQ_API_KEY,
+          baseURL: "https://api.groq.com/openai/v1",
+        });
+
+        const completion = await groq.chat.completions.create({
+          model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.25,
+          max_tokens: 360,
+        });
+
+        const text = completion.choices?.[0]?.message?.content?.trim();
+        if (text) {
+          return NextResponse.json({ text, mode: "groq" });
+        }
+      } catch (error: any) {
+        console.error("[SkillBridge AI] Groq mentor request failed", safeError(error));
+      }
     }
 
-    const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        input: [
-          {
-            role: "system",
-            content:
-              "You are SkillBridge Mentor, an evidence-first career copilot. Be concise, specific and practical. Ground every recommendation in the provided role, deterministic readiness and weighted gaps. Never invent, alter or recalculate numeric scores. Never use hype. Prefer one concrete project/action over generic course lists. Maximum 5 short sentences unless the user explicitly asks for a plan.",
-          },
-          {
-            role: "user",
-            content: JSON.stringify({ role, readiness, gaps, question }),
-          },
-        ],
-        max_output_tokens: 420,
-      }),
-      cache: "no-store",
+    // Optional paid fallback if OpenAI credits are available later.
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const completion = await openai.chat.completions.create({
+          model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.25,
+          max_tokens: 360,
+        });
+
+        const text = completion.choices?.[0]?.message?.content?.trim();
+        if (text) {
+          return NextResponse.json({ text, mode: "openai" });
+        }
+      } catch (error: any) {
+        console.error("[SkillBridge AI] OpenAI mentor fallback failed", safeError(error));
+      }
+    }
+
+    return NextResponse.json({
+      text: fallback(role, gaps, readiness, question),
+      mode: "deterministic-fallback",
     });
-
-    const payload = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      const err = payload as OpenAIError;
-      const diagnostic = {
-        status: response.status,
-        type: err?.error?.type || "unknown",
-        code: err?.error?.code || "unknown",
-        message: String(err?.error?.message || "OpenAI request failed").slice(0, 240),
-        model,
-      };
-      console.error("[SkillBridge AI] OpenAI mentor request failed", diagnostic);
-
-      return NextResponse.json({
-        text: fallback(role, gaps, readiness, question),
-        mode: "provider-fallback",
-        diagnostic: `${diagnostic.status}:${diagnostic.code}`,
-      });
-    }
-
-    const text = outputText(payload);
-    if (!text) {
-      console.error("[SkillBridge AI] OpenAI mentor returned no text", { model });
-      return NextResponse.json({
-        text: fallback(role, gaps, readiness, question),
-        mode: "empty-provider-fallback",
-        diagnostic: "empty_output",
-      });
-    }
-
-    return NextResponse.json({ text, mode: "openai", model });
   } catch (error: any) {
-    console.error("[SkillBridge AI] Mentor route exception", {
-      name: error?.name || "Error",
-      message: String(error?.message || "Unknown mentor error").slice(0, 240),
-    });
-
+    console.error("[SkillBridge AI] Mentor route failed", safeError(error));
     return NextResponse.json(
       {
-        text: "The AI layer is temporarily unavailable. Your deterministic readiness, skill gaps and opportunity ranking are still available.",
+        text: fallback(role, gaps, readiness, question),
         mode: "safe-fallback",
-        diagnostic: "route_exception",
       },
       { status: 200 }
     );
