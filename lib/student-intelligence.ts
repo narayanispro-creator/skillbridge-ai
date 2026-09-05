@@ -96,3 +96,17 @@ export function nextBestAction(skills:Skill[],profile:StudentProfile){
 }
 
 export function allSkillNames(){return Array.from(new Set(ROLES.flatMap(r=>Object.keys(r.requirements)))).sort()}
+
+
+export function projectedReadinessAfterSkill(skills:Skill[],role:RoleDefinition|undefined,skillName:string,newLevel:number){
+ if(!role)return 0;
+ const found=skills.some(s=>s.name.toLowerCase()===skillName.toLowerCase());
+ const next=found?skills.map(s=>s.name.toLowerCase()===skillName.toLowerCase()?{...s,level:newLevel}:s):[...skills,{id:`projection-${skillName}`,name:skillName,level:newLevel,evidence:[]}];
+ return roleReadiness(next,role);
+}
+
+export function projectedOpportunityScore(skills:Skill[],profile:StudentProfile,op:Opportunity,skillName:string,newLevel:number){
+ const found=skills.some(s=>s.name.toLowerCase()===skillName.toLowerCase());
+ const next=found?skills.map(s=>s.name.toLowerCase()===skillName.toLowerCase()?{...s,level:newLevel}:s):[...skills,{id:`projection-${skillName}`,name:skillName,level:newLevel,evidence:[]}];
+ return opportunityScore(next,profile,op);
+}

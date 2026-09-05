@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
-import { Bell, Command, Home, Search, ShieldCheck, Sparkles, Target, UsersRound, BriefcaseBusiness, BarChart3, CircleUserRound, BadgeCheck, UserRound, Route, ClipboardCheck } from "lucide-react";
+import { Bell, Command, Home, Search, ShieldCheck, Sparkles, Target, UsersRound, BriefcaseBusiness, BarChart3, CircleUserRound, BadgeCheck, UserRound, Route, ClipboardCheck, Presentation } from "lucide-react";
 
 const studentNav = [
   ["/dashboard", "Home", Home],
@@ -12,6 +12,7 @@ const studentNav = [
   ["/explore", "Explore", BriefcaseBusiness],
   ["/mentor", "Mentor", Sparkles],
   ["/profile", "Profile", UserRound],
+  ["/demo", "Judge demo", Presentation],
 ] as const;
 
 const mobileStudentNav = [

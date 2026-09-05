@@ -36,7 +36,7 @@ type StudentStateValue = {
   completedSteps:string[]; completeStep:(id:string)=>void;
   assessments:AssessmentResult[]; addAssessment:(r:AssessmentResult)=>void;
   activity:Activity[]; addActivity:(type:string,label:string)=>void;
-  hydrated:boolean; resetAll:()=>void;
+  hydrated:boolean; resetAll:()=>void; loadJudgeDemo:()=>void;
 };
 
 const DEFAULT_PROFILE:StudentProfile={
@@ -92,6 +92,20 @@ export function StudentStateProvider({children}:{children:ReactNode}){
     addActivity,
     resetAll:()=>{
       setSkills([]);setProfile(DEFAULT_PROFILE);setSaved([]);setApplied([]);setStartedSteps([]);setCompletedSteps([]);setAssessments([]);setActivity([]);localStorage.removeItem(KEY)
+    },
+    loadJudgeDemo:()=>{
+      const now=new Date().toISOString();
+      setProfile({name:"Aarav Demo",course:"B.Tech CSE",department:"Computer Science",targetRole:"Front-End Developer",location:"Roorkee",workMode:"Any",availability:"Available now",evidenceVisibility:"Recruiters",recruiterContact:true,notifications:true,onboardingComplete:true});
+      setSkills([
+        {id:"demo-html",name:"HTML",level:88,evidence:[{id:"ev-html",type:"Project",title:"Accessible portfolio UI",url:"https://example.com",addedAt:now}]},
+        {id:"demo-css",name:"CSS",level:82,evidence:[{id:"ev-css",type:"Repository",title:"Responsive design system",url:"https://github.com",addedAt:now}]},
+        {id:"demo-js",name:"JavaScript",level:58,evidence:[{id:"ev-js",type:"Assessment",title:"SkillBridge quick assessment",addedAt:now,score:68}]},
+        {id:"demo-git",name:"Git",level:46,evidence:[]},
+        {id:"demo-react",name:"React",level:28,evidence:[]},
+      ]);
+      setSaved(["nova-fe"]);setApplied([]);setStartedSteps([]);setCompletedSteps([]);
+      setAssessments([{id:"demo-assessment",role:"Front-End Developer",score:68,skillScores:{HTML:100,CSS:100,JavaScript:68,Git:45,React:35},completedAt:now}]);
+      setActivity([{id:"demo-1",type:"demo",label:"Loaded fictional SIH judge demo profile",at:now}]);
     },
   }),[skills,profile,saved,applied,startedSteps,completedSteps,assessments,activity,hydrated]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
