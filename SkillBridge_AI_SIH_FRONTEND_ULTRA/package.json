@@ -1,0 +1,12 @@
+{
+  "name":"skillbridge-ai",
+  "version":"1.0.0",
+  "private":true,
+  "scripts":{"dev":"next dev","build":"next build","start":"next start","lint":"next lint"},
+  "dependencies":{
+    "@supabase/ssr":"^0.5.2","@supabase/supabase-js":"^2.45.4",
+    "lucide-react":"^0.468.0","next":"^15.1.0","openai":"^4.77.0",
+    "react":"^19.0.0","react-dom":"^19.0.0","recharts":"^2.15.0"
+  },
+  "devDependencies":{"typescript":"^5.7.2","@types/node":"^22.10.2","@types/react":"^19.0.2","@types/react-dom":"^19.0.2"}
+}
